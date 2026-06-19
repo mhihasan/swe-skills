@@ -26,6 +26,29 @@ Works with Claude Code, OpenCode, Cursor, and GitHub Copilot.
 
 ## Installation
 
+**One-liner (recommended):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhihasan/swe-skills/main/install.sh | bash
+```
+
+Installs for all tools (Claude Code, Copilot) at user scope. Skills land in `~/.claude/skills/` and `~/.copilot/skills/`. Re-run the same command to update.
+
+**Options:**
+
+```bash
+# Claude only
+curl -fsSL https://raw.githubusercontent.com/mhihasan/swe-skills/main/install.sh | bash -s -- --tool=claude
+
+# Copilot only
+curl -fsSL https://raw.githubusercontent.com/mhihasan/swe-skills/main/install.sh | bash -s -- --tool=copilot
+
+# Project-scoped (Claude only)
+curl -fsSL https://raw.githubusercontent.com/mhihasan/swe-skills/main/install.sh | bash -s -- --scope=project --tool=claude /path/to/your-project
+```
+
+**Local clone (if you prefer):**
+
 ```bash
 git clone git@github.com:mhihasan/swe-skills.git
 cd swe-skills
