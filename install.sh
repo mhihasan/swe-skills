@@ -1,7 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ── MODE DETECTION ────────────────────────────────────────────────────────────
+# BASH_SOURCE is unset when piped from curl — use that to detect remote mode.
+here=""
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || here=""
+fi
+IS_LOCAL=false
+[ -n "$here" ] && [ -d "$here/skills" ] && IS_LOCAL=true
+
+if [ "${AGENTIC_SDLC_REMOTE:-}" = "1" ] && [ "$IS_LOCAL" = false ]; then
+  echo "swe-skills: install failed — cloned repo at $HOME/.swe-skills is missing the skills/ directory." >&2
+  echo "  Fix: rm -rf $HOME/.swe-skills and retry." >&2
+  exit 1
+fi
+
+if [ "$IS_LOCAL" = false ]; then
+  # ── REMOTE MODE: clone/pull, then re-exec local copy ──────────────────────
+  if ! command -v git >/dev/null 2>&1; then
+    echo "swe-skills: git required. Install git and retry." >&2
+    exit 1
+  fi
+
+  CLONE_DIR="$HOME/.swe-skills"
+
+  if [ -d "$CLONE_DIR" ] && [ ! -d "$CLONE_DIR/.git" ]; then
+    echo "swe-skills: $CLONE_DIR exists but is not a git repo (partial clone?)." >&2
+    echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
+    exit 1
+  elif [ -d "$CLONE_DIR/.git" ]; then
+    echo "Updating swe-skills in $CLONE_DIR ..."
+    if ! git -C "$CLONE_DIR" pull --ff-only; then
+      echo "swe-skills: update failed — local clone may have diverged." >&2
+      echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
+      exit 1
+    fi
+  else
+    echo "Cloning swe-skills to $CLONE_DIR ..."
+    git clone https://github.com/mhihasan/swe-skills "$CLONE_DIR" || { rm -rf "$CLONE_DIR"; exit 1; }
+  fi
+
+  # Apply default args if none given
+  if [ "$#" -eq 0 ]; then
+    set -- --scope=user --tool=all
+  fi
+
+  export AGENTIC_SDLC_REMOTE=1
+  exec bash "$CLONE_DIR/install.sh" "$@"
+fi
+
+# ── LOCAL MODE ────────────────────────────────────────────────────────────────
+REPO_DIR="$here"
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +93,7 @@ for arg in "$@"; do
     --tool=claude)   TOOL="claude" ;;
     --tool=copilot)  TOOL="copilot" ;;
     --tool=all)      TOOL="all" ;;
+    --*)             echo "Unknown option: $arg" >&2; exit 1 ;;
     /*)              PROJECT_PATH="$arg" ;;
     *)               PROJECT_PATH="$(pwd)/$arg" ;;
   esac
