@@ -1,0 +1,11 @@
+{
+  "name": "swe-skills",
+  "description": "Software craft skills grounded in books and methodologies: DDD, clean architecture, design patterns, pragmatic engineering, system design, and writing quality.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Hasanul Islam"
+  },
+  "homepage": "https://github.com/mhihasan/swe-skills",
+  "repository": "https://github.com/mhihasan/swe-skills",
+  "license": "MIT"
+}
