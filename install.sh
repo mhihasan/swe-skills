@@ -1,7 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ── MODE DETECTION ────────────────────────────────────────────────────────────
+# BASH_SOURCE is unset when piped from curl — use that to detect remote mode.
+here=""
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || here=""
+fi
+IS_LOCAL=false
+[ -n "$here" ] && [ -d "$here/skills" ] && IS_LOCAL=true
+
+if [ "${AGENTIC_SDLC_REMOTE:-}" = "1" ] && [ "$IS_LOCAL" = false ]; then
+  echo "swe-skills: install failed — cloned repo at $HOME/.swe-skills is missing the skills/ directory." >&2
+  echo "  Fix: rm -rf $HOME/.swe-skills and retry." >&2
+  exit 1
+fi
+
+if [ "$IS_LOCAL" = false ]; then
+  # ── REMOTE MODE: clone/pull, then re-exec local copy ──────────────────────
+  if ! command -v git >/dev/null 2>&1; then
+    echo "swe-skills: git required. Install git and retry." >&2
+    exit 1
+  fi
+
+  CLONE_DIR="$HOME/.swe-skills"
+
+  if [ -d "$CLONE_DIR" ] && [ ! -d "$CLONE_DIR/.git" ]; then
+    echo "swe-skills: $CLONE_DIR exists but is not a git repo (partial clone?)." >&2
+    echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
+    exit 1
+  elif [ -d "$CLONE_DIR/.git" ]; then
+    echo "Updating swe-skills in $CLONE_DIR ..."
+    if ! git -C "$CLONE_DIR" pull --ff-only; then
+      echo "swe-skills: update failed — local clone may have diverged." >&2
+      echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
+      exit 1
+    fi
+  else
+    echo "Cloning swe-skills to $CLONE_DIR ..."
+    git clone https://github.com/mhihasan/swe-skills "$CLONE_DIR" || { rm -rf "$CLONE_DIR"; exit 1; }
+  fi
+
+  # Apply default args if none given
+  if [ "$#" -eq 0 ]; then
+    set -- --scope=user --tool=all
+  fi
+
+  export AGENTIC_SDLC_REMOTE=1
+  exec bash "$CLONE_DIR/install.sh" "$@"
+fi
+
+# ── LOCAL MODE ────────────────────────────────────────────────────────────────
+REPO_DIR="$here"
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -18,8 +68,15 @@ link_skills() {
     dest="$target_dir/$name"
 
     if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-      echo "  SKIP (real dir, not a symlink): $dest"
-      skipped=$((skipped + 1))
+      if [ -f "$dest/SKILL.md" ]; then
+        rm -rf "$dest"
+        ln -sfn "$skill" "$dest"
+        echo "  UPDATED (replaced real dir with symlink): $dest"
+        linked=$((linked + 1))
+      else
+        echo "  SKIP (real dir, no SKILL.md — not a managed install): $dest"
+        skipped=$((skipped + 1))
+      fi
     else
       ln -sfn "$skill" "$dest"
       echo "  LINKED: $dest"
@@ -41,8 +98,10 @@ for arg in "$@"; do
     --scope=user)    SCOPE="user" ;;
     --scope=project) SCOPE="project" ;;
     --tool=claude)   TOOL="claude" ;;
+    --tool=opencode) TOOL="opencode" ;;
     --tool=copilot)  TOOL="copilot" ;;
     --tool=all)      TOOL="all" ;;
+    --*)             echo "Unknown option: $arg" >&2; exit 1 ;;
     /*)              PROJECT_PATH="$arg" ;;
     *)               PROJECT_PATH="$(pwd)/$arg" ;;
   esac
@@ -60,9 +119,10 @@ if [ -z "$SCOPE" ] || [ -z "$TOOL" ]; then
   echo "  ./install.sh --scope=user    --tool=claude|copilot|all"
   echo "  ./install.sh --scope=project --tool=claude|copilot|all  /path/to/your-project"
   echo ""
-  echo "  --tool=claude    Claude Code, OpenCode, Cursor  (~/.claude/skills/ or .claude/skills/)"
-  echo "  --tool=copilot   GitHub Copilot                 (~/.copilot/skills/ or .github/skills/)"
-  echo "  --tool=all       Both tools"
+  echo "  --tool=claude    Claude Code, Cursor          (~/.claude/skills/ or .claude/skills/)"
+  echo "  --tool=opencode  OpenCode                    (~/.config/opencode/skills/ or .opencode/skills/)"
+  echo "  --tool=copilot   GitHub Copilot              (~/.copilot/skills/ or .github/skills/)"
+  echo "  --tool=all       All tools"
   echo ""
   echo "  --scope=user     Install globally, available in all projects"
   echo "  --scope=project  Install into the given project directory only"
@@ -101,6 +161,20 @@ install_claude_project() {
   link_skills "$REPO_DIR/book-skills" "$PROJECT_PATH/.claude/skills"
 }
 
+install_opencode_user() {
+  echo ""
+  echo "[opencode / user scope] $HOME/.config/opencode/skills/"
+  link_skills "$REPO_DIR/skills" "$HOME/.config/opencode/skills"
+  link_skills "$REPO_DIR/book-skills" "$HOME/.config/opencode/skills"
+}
+
+install_opencode_project() {
+  echo ""
+  echo "[opencode / project scope] $PROJECT_PATH/.opencode/skills/"
+  link_skills "$REPO_DIR/skills" "$PROJECT_PATH/.opencode/skills"
+  link_skills "$REPO_DIR/book-skills" "$PROJECT_PATH/.opencode/skills"
+}
+
 install_copilot_user() {
   echo ""
   echo "[copilot / user scope] $HOME/.copilot/skills/"
@@ -116,12 +190,14 @@ install_copilot_project() {
 }
 
 case "$TOOL-$SCOPE" in
-  claude-user)     install_claude_user ;;
-  claude-project)  install_claude_project ;;
-  copilot-user)    install_copilot_user ;;
-  copilot-project) install_copilot_project ;;
-  all-user)        install_claude_user; install_copilot_user ;;
-  all-project)     install_claude_project; install_copilot_project ;;
+  claude-user)      install_claude_user ;;
+  claude-project)   install_claude_project ;;
+  opencode-user)    install_opencode_user ;;
+  opencode-project) install_opencode_project ;;
+  copilot-user)     install_copilot_user ;;
+  copilot-project)  install_copilot_project ;;
+  all-user)         install_claude_user; install_opencode_user; install_copilot_user ;;
+  all-project)      install_claude_project; install_opencode_project; install_copilot_project ;;
 esac
 
 echo ""
