@@ -11,34 +11,34 @@ IS_LOCAL=false
 [ -n "$here" ] && [ -d "$here/skills" ] && IS_LOCAL=true
 
 if [ "${AGENTIC_SDLC_REMOTE:-}" = "1" ] && [ "$IS_LOCAL" = false ]; then
-  echo "swe-skills: install failed — cloned repo at $HOME/.swe-skills is missing the skills/ directory." >&2
-  echo "  Fix: rm -rf $HOME/.swe-skills and retry." >&2
+  echo "swe-agent-skills: install failed — cloned repo at $HOME/.swe-agent-skills is missing the skills/ directory." >&2
+  echo "  Fix: rm -rf $HOME/.swe-agent-skills and retry." >&2
   exit 1
 fi
 
 if [ "$IS_LOCAL" = false ]; then
   # ── REMOTE MODE: clone/pull, then re-exec local copy ──────────────────────
   if ! command -v git >/dev/null 2>&1; then
-    echo "swe-skills: git required. Install git and retry." >&2
+    echo "swe-agent-skills: git required. Install git and retry." >&2
     exit 1
   fi
 
-  CLONE_DIR="$HOME/.swe-skills"
+  CLONE_DIR="$HOME/.swe-agent-skills"
 
   if [ -d "$CLONE_DIR" ] && [ ! -d "$CLONE_DIR/.git" ]; then
-    echo "swe-skills: $CLONE_DIR exists but is not a git repo (partial clone?)." >&2
+    echo "swe-agent-skills: $CLONE_DIR exists but is not a git repo (partial clone?)." >&2
     echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
     exit 1
   elif [ -d "$CLONE_DIR/.git" ]; then
-    echo "Updating swe-skills in $CLONE_DIR ..."
+    echo "Updating swe-agent-skills in $CLONE_DIR ..."
     if ! git -C "$CLONE_DIR" pull --ff-only; then
-      echo "swe-skills: update failed — local clone may have diverged." >&2
+      echo "swe-agent-skills: update failed — local clone may have diverged." >&2
       echo "  Fix: rm -rf $CLONE_DIR and retry." >&2
       exit 1
     fi
   else
-    echo "Cloning swe-skills to $CLONE_DIR ..."
-    git clone https://github.com/mhihasan/swe-skills "$CLONE_DIR" || { rm -rf "$CLONE_DIR"; exit 1; }
+    echo "Cloning swe-agent-skills to $CLONE_DIR ..."
+    git clone https://github.com/mhihasan/swe-agent-skills "$CLONE_DIR" || { rm -rf "$CLONE_DIR"; exit 1; }
   fi
 
   # Apply default args if none given
@@ -108,7 +108,7 @@ for arg in "$@"; do
 done
 
 echo ""
-echo "swe-skills install.sh"
+echo "swe-agent-skills install.sh"
 echo "──────────────────────────────────────────────────────"
 
 # ── VALIDATION ────────────────────────────────────────────────────────────────
