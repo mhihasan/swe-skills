@@ -68,8 +68,15 @@ link_skills() {
     dest="$target_dir/$name"
 
     if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-      echo "  SKIP (real dir, not a symlink): $dest"
-      skipped=$((skipped + 1))
+      if [ -f "$dest/SKILL.md" ]; then
+        rm -rf "$dest"
+        ln -sfn "$skill" "$dest"
+        echo "  UPDATED (replaced real dir with symlink): $dest"
+        linked=$((linked + 1))
+      else
+        echo "  SKIP (real dir, no SKILL.md — not a managed install): $dest"
+        skipped=$((skipped + 1))
+      fi
     else
       ln -sfn "$skill" "$dest"
       echo "  LINKED: $dest"
@@ -91,6 +98,7 @@ for arg in "$@"; do
     --scope=user)    SCOPE="user" ;;
     --scope=project) SCOPE="project" ;;
     --tool=claude)   TOOL="claude" ;;
+    --tool=opencode) TOOL="opencode" ;;
     --tool=copilot)  TOOL="copilot" ;;
     --tool=all)      TOOL="all" ;;
     --*)             echo "Unknown option: $arg" >&2; exit 1 ;;
@@ -111,9 +119,10 @@ if [ -z "$SCOPE" ] || [ -z "$TOOL" ]; then
   echo "  ./install.sh --scope=user    --tool=claude|copilot|all"
   echo "  ./install.sh --scope=project --tool=claude|copilot|all  /path/to/your-project"
   echo ""
-  echo "  --tool=claude    Claude Code, OpenCode, Cursor  (~/.claude/skills/ or .claude/skills/)"
-  echo "  --tool=copilot   GitHub Copilot                 (~/.copilot/skills/ or .github/skills/)"
-  echo "  --tool=all       Both tools"
+  echo "  --tool=claude    Claude Code, Cursor          (~/.claude/skills/ or .claude/skills/)"
+  echo "  --tool=opencode  OpenCode                    (~/.config/opencode/skills/ or .opencode/skills/)"
+  echo "  --tool=copilot   GitHub Copilot              (~/.copilot/skills/ or .github/skills/)"
+  echo "  --tool=all       All tools"
   echo ""
   echo "  --scope=user     Install globally, available in all projects"
   echo "  --scope=project  Install into the given project directory only"
@@ -152,6 +161,20 @@ install_claude_project() {
   link_skills "$REPO_DIR/book-skills" "$PROJECT_PATH/.claude/skills"
 }
 
+install_opencode_user() {
+  echo ""
+  echo "[opencode / user scope] $HOME/.config/opencode/skills/"
+  link_skills "$REPO_DIR/skills" "$HOME/.config/opencode/skills"
+  link_skills "$REPO_DIR/book-skills" "$HOME/.config/opencode/skills"
+}
+
+install_opencode_project() {
+  echo ""
+  echo "[opencode / project scope] $PROJECT_PATH/.opencode/skills/"
+  link_skills "$REPO_DIR/skills" "$PROJECT_PATH/.opencode/skills"
+  link_skills "$REPO_DIR/book-skills" "$PROJECT_PATH/.opencode/skills"
+}
+
 install_copilot_user() {
   echo ""
   echo "[copilot / user scope] $HOME/.copilot/skills/"
@@ -167,12 +190,14 @@ install_copilot_project() {
 }
 
 case "$TOOL-$SCOPE" in
-  claude-user)     install_claude_user ;;
-  claude-project)  install_claude_project ;;
-  copilot-user)    install_copilot_user ;;
-  copilot-project) install_copilot_project ;;
-  all-user)        install_claude_user; install_copilot_user ;;
-  all-project)     install_claude_project; install_copilot_project ;;
+  claude-user)      install_claude_user ;;
+  claude-project)   install_claude_project ;;
+  opencode-user)    install_opencode_user ;;
+  opencode-project) install_opencode_project ;;
+  copilot-user)     install_copilot_user ;;
+  copilot-project)  install_copilot_project ;;
+  all-user)         install_claude_user; install_opencode_user; install_copilot_user ;;
+  all-project)      install_claude_project; install_opencode_project; install_copilot_project ;;
 esac
 
 echo ""
